@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# simple script to launch an instance of urxvtc
+# checks for presence of daemon and, if necessary loads it
+
+urxvtc "$@"
+if [ $? -eq 2 ]; then
+	urxvtd -q -o -f
+	urxvtc "$@"
+fi

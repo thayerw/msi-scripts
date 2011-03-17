@@ -1,0 +1,20 @@
+#!/bin/sh
+
+# Rip current stream playing in moc
+# moc executes script, passing the filename (URL) as an argument.
+# Script is detached to prevent moc from killing it on exit.
+
+#   ExecCommand1  = "ripstreammoc %f"
+#   ExecCommand10 = "killall streamripper"
+
+# verbosity     be quiet and direct errors to stderr
+# xs_offset     trim first 5 secs of each song due to crossfading: --xs_offset=5000 
+# -s            don't create sub-dir for each stream
+# -q            prepend sequence number to filename
+# -d            save streams to path
+# -M            stop recording session at 2GB
+# -u            send 'mos' as user agent
+# -D            sequence_artist_-_title: "%q %A - %T" 
+
+nohup streamripper $@ --quiet --stderr -q -d ~/media/music/streams -M 2048 -u moc &>/dev/null &
+

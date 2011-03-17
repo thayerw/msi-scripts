@@ -1,0 +1,84 @@
+#!/bin/bash
+
+#
+# dvol - OSD Volume utility
+#
+
+#Customize this stuff
+IF="Master"
+SECS="1"
+BG="#0066ff"
+FG="white"
+XPOS="705"
+YPOS="500"
+WIDTH="237"
+HEIGHT="30"
+FONT="-*-dina-medium-r-*-*-13-*-*-*-*-*-*-*"
+#FONT="-*-terminus-medium-r-*-*-12-*-*-*-*-*-*-*"
+#FONT="-*-profont-*-*-*-*-12-*-*-*-*-*-*-*"
+#FONT="-*-proggyclean-*-*-*-*-*-*-*-*-*-*-*-*"
+#FONT="-*-proggysquaresz-*-*-*-*-*-*-*-*-*-*-*-*"
+
+#Probably do not customize
+PIPE="/tmp/dvolpipe"
+
+err() {
+  echo "$1"
+  exit 1
+}
+
+usage() {
+  echo "usage: dvol [option] [argument]"
+  echo
+  echo "Options:"
+  echo "     -i, --increase - increase volume by \`argument'"
+  echo "     -d, --decrease - decrease volume by \`argument'"
+  echo "     -t, --toggle   - toggle mute on and off"
+  echo "     -h, --help     - display this"
+  exit
+}
+
+#Argument Parsing
+case "$1" in
+  '-i'|'--increase')
+    [ -z "$2" ] && err "No argument specified for increase."
+    [ -n "$(tr -d [0-9] <<<$2)" ] && err "The argument needs to be an integer."
+    AMIXARG="${2}%+"
+    ;;
+  '-d'|'--decrease')
+    [ -z "$2" ] && err "No argument specified for decrease."
+    [ -n "$(tr -d [0-9] <<<$2)" ] && err "The argument needs to be an integer."
+    AMIXARG="${2}%-"
+    ;;
+  '-t'|'--toggle')
+    AMIXARG="toggle"
+    ;;
+  ''|'-h'|'--help')
+    usage
+    ;;
+  *)
+    err "Unrecognized option \`$1', see dvol --help"
+    ;;
+esac
+
+#Actual volume changing (readability low)
+AMIXOUT="$(amixer set "$IF" "$AMIXARG" | tail -n 1)"
+MUTE="$(cut -d '[' -f 4 <<<"$AMIXOUT")"
+if [ "$MUTE" = "off]" ]; then
+  VOL="0"
+else
+  VOL="$(cut -d '[' -f 2 <<<"$AMIXOUT" | sed 's/%.*//g')"
+  echo "$VOL"
+fi
+
+#Using named pipe to determine whether previous call still exists
+#Also prevents multiple volume bar instances
+if [ ! -e "$PIPE" ]; then
+  mkfifo "$PIPE"
+  (dzen2 -l 1 -x "$XPOS" -y "$YPOS" -w "$WIDTH" -h "$HEIGHT" -bg "$BG" -fg "$FG" -fn "$FONT" -e 'onstart=uncollapse' < "$PIPE" 
+   rm -f "$PIPE") &
+fi
+
+#Feed the pipe!
+(echo "Volume" ; echo "$VOL" | dbar ; sleep "$SECS") > "$PIPE"
+

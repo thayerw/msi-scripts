@@ -1,0 +1,131 @@
+#!/usr/bin/env python
+
+import pygtk
+import gtk
+import gobject
+import commands
+import sys
+import os
+import re
+import getopt
+
+def err(msg):
+  print msg
+  sys.exit(1)
+
+def usage():
+  print '''
+Usage: changevol [options] [argument]
+
+Options:
+  -i, --increase  increase volume by `argument'
+  -d, --decrease  decrease volume by `argument'
+  -c, --control   specify the mixer control by `argument' (default Master)
+                  use only to modify a mixer other than Master
+
+  -t, --toggle    toggle mute on and off
+  -s, --status    display current volume status without modifying it
+  -q, --quiet     don't display the gtk progressbar, just change the volume
+  -b, --backlight adjust the backlight using xbacklight
+  -h, --help      display this help message
+
+Note:
+  Volume increases and decreases won't be exact due to amixer oddities.
+'''
+  sys.exit(0)
+
+class GetVolInfo():
+
+  def __init__(self, command):
+    self.amixeroutput = commands.getoutput(command)
+
+    if re.compile("off]$", re.M).search(self.amixeroutput, 1):
+      self.realvol = "0"
+      self.endlabel = "Mute"
+    else:
+      self.tempvolarray1 = self.amixeroutput.split("[")
+      self.tempvolarray2 = self.tempvolarray1[1].split("%")
+      self.realvol = self.tempvolarray2[0]
+      self.endlabel = self.realvol + " %"
+
+    self.percent = float(self.realvol)/100
+    self.label = "Volume " + self.endlabel
+
+class ProgressBar:
+  
+  def timeout_callback(self):
+    gtk.main_quit()
+    return False
+
+  def __init__(self, fraction, label):
+    self.window = gtk.Window(gtk.WINDOW_POPUP)
+    self.window.set_border_width(0)
+    self.window.set_default_size(180, -1)
+    self.window.set_position(gtk.WIN_POS_CENTER)
+
+    timer = gobject.timeout_add(1000, self.timeout_callback)
+
+    self.bar = gtk.ProgressBar()
+    self.bar.set_fraction(fraction)
+    self.bar.set_orientation(gtk.PROGRESS_LEFT_TO_RIGHT)
+    self.bar.set_text(label)
+    self.bar.show()
+
+    self.window.add(self.bar)
+    self.window.show()
+
+
+#Run through parameters, set variables and such
+CONTROL = "Master"
+AMIXEROPTION = "unset"
+QUIET = "NO"
+BACKLIGHT = "NO"
+
+if (len(sys.argv) < 2):
+  usage()
+
+try:
+  opts, args = getopt.getopt(sys.argv[1:], "bqhtsc:i:d:", ["backlight" "quiet", "help", "toggle", "status", "control=", "increase=", "decrease="])
+except getopt.GetoptError:
+  err("Incorrect usage, see changevol --help.")
+
+if (len(opts) == 0):
+  err("Incorrect usage, see --help.")
+
+for opt, arg in opts:
+  if opt in ("-h", "--help"):
+    usage()
+  elif opt in ("-q", "--quiet"):
+    QUIET = "YES"
+  elif opt in ("-b", "--backlight"):
+    BACKLIGHT = "YES"
+  elif opt in ("-t", "--toggle"):
+    AMIXEROPTION = "toggle"
+  elif opt in ("-s", "--status"):
+    INCREMENT = "0"
+    AMIXEROPTION = INCREMENT + "%+"
+  elif opt in ("-c", "--control"):
+    CONTROL = arg
+  elif opt in ("-i", "--increase"):
+    INCREMENT = arg
+    AMIXEROPTION = INCREMENT + "%+"
+  elif opt in ("-d", "--decrease"):
+    INCREMENT = arg
+    AMIXEROPTION = INCREMENT + "%-"
+  else:
+    err("Incorrect usage, see --help")
+
+if (AMIXEROPTION == "unset"):
+  err("No volume changing action has been dictated. See changevol --help.")
+
+command = "amixer set " + CONTROL + " " + AMIXEROPTION
+
+#Execution
+volume = GetVolInfo(command)
+if (QUIET == "NO"):
+  ProgressBar(volume.percent, volume.label)
+  gtk.main()
+
+if (BACKLIGHT == "YES"):
+  os.execv('/usr/bin/xbacklight', ['placeholder', '-set', volume.realvol])
+

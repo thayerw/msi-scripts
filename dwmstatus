@@ -1,0 +1,115 @@
+#!/bin/sh
+
+# A system info script for the dwm statusbar (or similar applications)
+# You may need to modify paths for your particular setup.
+
+# This script has proven more CPU efficient than conky. It 
+# utilizes approximately 10% of the CPU every $SLEEP seconds, whereas
+# conky utilizes 6-8% CPU at a constant rate displaying the same stats.
+
+# NOTE: this script requires the 'bc' bash calculator
+
+# update every x seconds
+SLEEP=7
+
+# rx/tx counts ( SEE NETWORK RATES BELOW)
+# must be placed outside the loop for proper execution
+#RXB=`cat /sys/class/net/${INTERFACE}/statistics/rx_bytes`
+#TXB=`cat /sys/class/net/${INTERFACE}/statistics/tx_bytes`
+
+while :; do
+
+TIMESTAMP=`date +"%b %d %I:%M %p"`
+
+
+# MEMORY AND LOAD INFO
+MEMMB=`free -m | grep 'buffers/cache' | awk '{print $3 "Mb"}'`
+#MEMUSED=`free -m | grep 'buffers/cache' | awk '{print $3}'`
+#MEMTOTAL=`free -m | grep 'Mem:' | awk '{print $2}'`
+#MEMPERCENT=$(echo $MEMUSED $MEMTOTAL | awk '{printf "%.f%%", ($1/$2)*100}')
+
+#LOAD=`awk '{print $1 "  " $2 "  " $3}' /proc/loadavg` 
+LOAD=`awk '{print $1}' /proc/loadavg` 
+
+
+# CPU INFO
+#CPUUSAGE=`procinfo | grep 'idle' | awk '{print 100-$4}'`
+CPUTEMP=`awk '{print $2 "°"}' /proc/acpi/thermal_zone/THRM/temperature`
+#CPUGOV=`cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor`
+CPUFREQ0=`cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq | awk '{print ($1/1000000)"GHz"}'`
+
+
+# POWER MANAGEMENT INFO
+
+BATSTATE=`awk '{print $2}' /proc/acpi/ac_adapter/ADP1/state`
+BATREM=`grep 'remaining capacity' /proc/acpi/battery/BAT1/state | awk '{print $3}'`
+BATMAX=`grep 'design capacity:' /proc/acpi/battery/BAT1/info | awk '{print $3}'`
+#BATCHARGE=`grep 'charging state' /proc/acpi/battery/BAT0/state | awk '{print $3}'`
+
+if [ "$BATSTATE" = "on-line" ]; then 
+  BATSOURCE=$(echo "AC")
+  BAT=$(echo $BATREM $BATMAX | awk '{printf "%.f%%", ($1/$2)*100'})
+else
+  BATSOURCE=$(echo "DC")
+  BATPRESENT=`grep 'present rate' /proc/acpi/battery/BAT1/state | awk '{print $3}'`
+  BAT=$(echo $BATREM $BATMAX $BATPRESENT | awk '{printf "%.f%% (%d min)", ($1/$2)*100, ($1/$3)*60}')
+fi
+
+
+# NETWORK INFO
+
+# declare network interfaces)
+ETHFACE="eth0"
+WIFACE="wlan0"
+WIFIUP=`ifconfig | grep "$WIFACE" | awk '{print $1}'`
+
+if [ "$WIFIUP" = "$WIFACE" ]; then
+#  IP=`ifconfig $WIFACE | grep 'inet addr:'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{print $1}'`
+  UPFACE=$WIFACE
+  ESSID=`iwgetid | cut -d\" -f2 | awk '{print  $1}'`
+  SIGNAL=`iwconfig $WIFACE | grep 'Signal level' | cut -d= -f3 | awk '{print 100+$1 "%"}'`
+  NETINFO=$(echo  $SIGNAL $ESSID)
+else
+#  IP=`ifconfig $ETHFACE | grep 'inet addr:'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{print $1}'`
+  UPFACE=$ETHFACE
+  #NETINFO=$(echo "^i(${ICONPATH}/network.xpm)" )
+  NETINFO=$(echo "LAN" )
+fi
+
+# UP/DOWN NETWORK RATES
+
+# grab whichever interface is declared UP as above
+INTERFACE=$UPFACE
+
+# get new rx/tx counts
+RXBN=`cat /sys/class/net/${INTERFACE}/statistics/rx_bytes`
+TXBN=`cat /sys/class/net/${INTERFACE}/statistics/tx_bytes`
+
+# calculate the rates
+# format the values to 4 digit fields
+RXR=$(echo "($RXBN - $RXB) / 1024/${SLEEP}" | bc)
+TXR=$(echo "($TXBN - $TXB) / 1024/${SLEEP}" | bc)
+
+# reset old rates
+RXB=$RXBN; TXB=$TXBN
+
+
+# MP3 INFO
+
+MP3=''
+#MP3TEST=`mocp -i | head -n1 | awk '{print $2}'`
+#MP3INFO=`mocp -i | grep '^Title:' | cut -c 10-42`
+#MPDTEST=`mpc | head -n1 | awk '{print $1}'`
+#MPDINFO=`mpc | head -n1 | cut -c 1-35`
+
+#if [ "$MP3TEST" = "PLAY" ]; then
+#  MP3=$(echo $MP3INFO)  
+#fi
+
+
+echo "${LOAD} / ${CPUTEMP} ${CPUFREQ0} / ${MEMMB} / ${BATSOURCE} ${BAT} / ${NETINFO} ${TXR}K ${RXR}K / ${TIMESTAMP}"
+
+sleep $SLEEP
+
+done 
+

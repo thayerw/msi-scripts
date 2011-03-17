@@ -1,0 +1,9 @@
+#!/bin/sh
+
+if [ -d $HOME/bin ]; then
+  cmd=`ls -1 $HOME/bin | dmenu $*`
+  if [ "x$cmd" != "x" ]; then
+    exec "$HOME/bin/$cmd"
+  fi  
+fi
+

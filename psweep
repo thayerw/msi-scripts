@@ -1,0 +1,94 @@
+#!/bin/bash
+
+# pacreview.sh
+# helps you trim your collection of installed packages
+
+# by Pierce Lopez 2007-10-21, released to the Public Domain
+
+keepers=()
+orphans=()
+
+gen_orphs()
+{
+    echo "Generating list of orphans..."
+    unset orphans
+    for package in `pacman -Q | cut -d' ' -f1`
+    do
+        if [ "$(pacman -Qi $package | grep '^Required')" == "Required By    : None" ]
+        then orphans[${#orphans[*]}]=$package
+        fi
+    done
+}
+
+check_keeps()
+{
+    if [ ${#keepers[*]} == 0 ]
+    then return 0
+    fi
+
+    for keeper in ${keepers[*]}
+    do
+        if [ "$1" == "$keeper" ]
+        then return 1
+        fi
+    done
+    return 0
+}
+
+flush_input()
+{
+    while read -n 1 -t 1
+    do
+        false
+    done
+}
+
+query_user()
+{
+    need_input=1
+    while [ $need_input == 1 ]
+    do
+        need_input=0
+        echo -ne 'Remove orphan package \e[1m'
+        echo -n $1
+        echo -ne '\e[m? [k,r,i,h=help]: '
+        read -n 1 choice
+        echo
+        if [ "$choice" == k ]
+        then keepers[${#keepers[*]}]=$1
+        elif [ "$choice" == r ]
+        then pacman -R "$1"
+        elif [ "$choice" == i ]
+        then
+            pacman -Qi "$1"
+            need_input=1
+        elif [ "$choice" == h ]
+        then
+            echo "k = keep"
+            echo "r = remove"
+            echo "i = see package information"
+            echo "h = show this help"
+            need_input=1
+        else need_input=1
+        fi
+    done
+}
+
+neworphs=1
+while [ $neworphs == 1 ]
+do
+    neworphs=0
+    gen_orphs
+
+    flush_input
+    for orphan in ${orphans[*]}
+    do
+        check_keeps $orphan
+        if [ $? == 0 ]
+        then
+            query_user $orphan
+            neworphs=1
+        fi
+    done
+done
+
